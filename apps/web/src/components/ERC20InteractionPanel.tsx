@@ -16,9 +16,10 @@ import {
     Loader2,
     Globe,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    BookOpen,
 } from 'lucide-react';
-import { cn } from './cn';
+import { cn } from '@/lib/cn';
 import { useAccount, useWalletClient, usePublicClient, useSwitchChain } from 'wagmi';
 import { arbitrum, arbitrumSepolia, type Chain } from 'wagmi/chains';
 
@@ -141,8 +142,9 @@ export function ERC20InteractionPanel({
 
     // Wagmi hooks for wallet connection
     const { address: userAddress, isConnected: walletConnected, chain: currentChain } = useAccount();
-    const publicClient = usePublicClient({ chainId: networkConfig.chainId });
-    const { data: walletClient } = useWalletClient({ chainId: networkConfig.chainId });
+    const chainId = networkConfig.chainId;
+    const publicClient = usePublicClient({ chainId: chainId as Parameters<typeof usePublicClient>[0] extends { chainId?: infer C } ? C : never });
+    const { data: walletClient } = useWalletClient({ chainId });
     const { switchChainAsync } = useSwitchChain();
 
     // Token info
@@ -155,6 +157,9 @@ export function ERC20InteractionPanel({
     // Form inputs - Write operations
     const [transferTo, setTransferTo] = useState('');
     const [transferAmount, setTransferAmount] = useState('');
+    const [transferFromAddress, setTransferFromAddress] = useState('');
+    const [transferFromTo, setTransferFromTo] = useState('');
+    const [transferFromAmount, setTransferFromAmount] = useState('');
     const [approveSpender, setApproveSpender] = useState('');
     const [approveAmount, setApproveAmount] = useState('');
     const [mintAmount, setMintAmount] = useState('');
@@ -430,6 +435,24 @@ export function ERC20InteractionPanel({
         }
     };
 
+    const handleTransferFrom = async () => {
+        try {
+            const contract = await getWriteContract();
+            if (!contract || !transferFromAddress || !transferFromTo || !transferFromAmount) return;
+            handleTransaction(
+                () => contract.transferFrom(
+                    transferFromAddress,
+                    transferFromTo,
+                    ethers.parseUnits(transferFromAmount, decimals)
+                ),
+                `Transferred ${transferFromAmount} ${tokenSymbol || 'tokens'} from ${transferFromAddress.slice(0, 6)}...!`
+            );
+        } catch (error: any) {
+            setTxStatus({ status: 'error', message: error.message || 'Failed to prepare transaction' });
+            setTimeout(() => setTxStatus({ status: 'idle', message: '' }), 5000);
+        }
+    };
+
     const handleApprove = async () => {
         console.log('[ERC20] handleApprove called');
         try {
@@ -516,192 +539,170 @@ export function ERC20InteractionPanel({
         }
     };
 
+    const inputClass = 'input-field';
+    const btnClass = (color: string) => cn('btn-primary', color);
+
     return (
-        <div className="space-y-4">
-            {/* Header */}
-            <div className="p-3 rounded-lg border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-transparent">
-                <div className="flex items-center gap-2 mb-1">
-                    <Coins className="w-4 h-4 text-emerald-400" />
-                    <span className="text-sm font-medium text-white">
-                        {tokenName || 'ERC-20'} {tokenSymbol ? `(${tokenSymbol})` : 'Token'}
-                    </span>
+        <div className="space-y-6 p-5 sm:p-6">
+            {/* Token header */}
+            <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-transparent to-cyan-500/5 px-4 py-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                        <Coins className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-semibold text-white">
+                            {tokenName || 'ERC-20'} {tokenSymbol ? `(${tokenSymbol})` : 'Token'}
+                        </h2>
+                        <p className="text-sm text-slate-400">Stylus contract</p>
+                    </div>
                 </div>
-                <p className="text-[10px] text-forge-muted">Stylus Contract Interaction</p>
             </div>
 
-            {/* Wallet Status */}
-            <div className={cn(
-                'p-2.5 rounded-lg border',
-                walletConnected ? 'border-green-500/30 bg-green-500/5' : 'border-amber-500/30 bg-amber-500/5'
-            )}>
-                <div className="flex items-center gap-2">
-                    <Wallet className={cn('w-3.5 h-3.5', walletConnected ? 'text-green-400' : 'text-amber-400')} />
+            {contractError && (
+                <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />
+                    <p className="text-sm text-red-300">{contractError}</p>
+                </div>
+            )}
+
+            {/* Wallet + Network row */}
+            <div className="space-y-4">
+                <div className={cn(
+                    'flex items-center gap-3 rounded-xl border px-4 py-3',
+                    walletConnected ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'
+                )}>
+                    <Wallet className={cn('h-5 w-5 shrink-0', walletConnected ? 'text-emerald-400' : 'text-amber-400')} />
                     {walletConnected ? (
-                        <span className="text-[10px] text-green-300">
-                            Connected: <code className="text-green-400">{userAddress?.slice(0, 6)}...{userAddress?.slice(-4)}</code>
+                        <span className="text-sm text-slate-200">
+                            <span className="text-slate-400">Connected</span>{' '}
+                            <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-emerald-400">{userAddress?.slice(0, 6)}…{userAddress?.slice(-4)}</code>
                         </span>
                     ) : (
-                        <span className="text-[10px] text-amber-300">Connect wallet via Wallet Auth node for write ops</span>
+                        <span className="text-sm text-amber-200/90">Connect your wallet for write operations</span>
                     )}
                 </div>
-            </div>
 
-            {/* Network Selector */}
-            <div className="space-y-1.5">
-                <label className="text-xs text-forge-muted flex items-center gap-1.5">
-                    <Globe className="w-3 h-3" /> Network
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={() => setSelectedNetwork('arbitrum-sepolia')}
-                        className={cn(
-                            'px-3 py-2 rounded-lg text-xs font-medium transition-colors border',
-                            selectedNetwork === 'arbitrum-sepolia'
-                                ? 'bg-emerald-600 border-emerald-500 text-white'
-                                : 'bg-forge-bg border-forge-border/50 text-forge-muted hover:text-white hover:border-emerald-500/50'
-                        )}
-                    >
-                        Arbitrum Sepolia
-                    </button>
-                    <button
-                        onClick={() => setSelectedNetwork('arbitrum')}
-                        className={cn(
-                            'px-3 py-2 rounded-lg text-xs font-medium transition-colors border',
-                            selectedNetwork === 'arbitrum'
-                                ? 'bg-emerald-600 border-emerald-500 text-white'
-                                : 'bg-forge-bg border-forge-border/50 text-forge-muted hover:text-white hover:border-emerald-500/50'
-                        )}
-                    >
-                        Arbitrum One
-                    </button>
-                    <button
-                        onClick={() => setSelectedNetwork('superposition')}
-                        className={cn(
-                            'px-3 py-2 rounded-lg text-xs font-medium transition-colors border',
-                            selectedNetwork === 'superposition'
-                                ? 'bg-emerald-600 border-emerald-500 text-white'
-                                : 'bg-forge-bg border-forge-border/50 text-forge-muted hover:text-white hover:border-emerald-500/50'
-                        )}
-                    >
-                        Superposition
-                    </button>
-                    <button
-                        onClick={() => setSelectedNetwork('superposition-testnet')}
-                        className={cn(
-                            'px-3 py-2 rounded-lg text-xs font-medium transition-colors border',
-                            selectedNetwork === 'superposition-testnet'
-                                ? 'bg-emerald-600 border-emerald-500 text-white'
-                                : 'bg-forge-bg border-forge-border/50 text-forge-muted hover:text-white hover:border-emerald-500/50'
-                        )}
-                    >
-                        Superposition Testnet
-                    </button>
+                <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-400">
+                        <Globe className="h-4 w-4" /> Network
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {(['arbitrum-sepolia', 'arbitrum', 'superposition', 'superposition-testnet'] as const).map((net) => (
+                            <button
+                                key={net}
+                                onClick={() => setSelectedNetwork(net)}
+                                className={cn(
+                                    'rounded-xl border px-3 py-2.5 text-xs font-medium transition-all',
+                                    selectedNetwork === net
+                                        ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-500/10'
+                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
+                                )}
+                            >
+                                {NETWORKS[net].name}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            {/* Contract Info */}
-            <div className="p-2.5 rounded-lg bg-forge-bg/50 border border-forge-border/30">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-forge-muted">Contract:</span>
+            {/* Contract */}
+            <div className="section-card space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-400">Contract</span>
                         {isUsingDefaultContract && (
-                            <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">Default</span>
+                            <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-400">Default</span>
                         )}
                     </div>
                     <a
                         href={`${displayExplorerUrl}/address/${contractAddress}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] font-mono text-emerald-400 hover:underline flex items-center gap-1"
+                        className="inline-flex items-center gap-1.5 rounded-lg font-mono text-sm text-emerald-400 hover:text-emerald-300 hover:underline"
                     >
-                        {contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}
-                        <ExternalLink className="w-2.5 h-2.5" />
+                        {contractAddress.slice(0, 6)}…{contractAddress.slice(-4)}
+                        <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                 </div>
-            </div>
+                <button
+                    type="button"
+                    onClick={() => setShowCustomContract(!showCustomContract)}
+                    className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                    <span>Use custom contract</span>
+                    {showCustomContract ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
 
-            {/* Custom Contract Toggle */}
-            <button
-                onClick={() => setShowCustomContract(!showCustomContract)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-forge-bg/50 border border-forge-border/30 rounded-lg text-xs text-forge-muted hover:text-white transition-colors"
-            >
-                <span>Use Custom Contract</span>
-                {showCustomContract ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-
-            {showCustomContract && (
-                <div className="p-3 rounded-lg bg-forge-bg/30 border border-forge-border/30 space-y-2">
-                    <input
-                        type="text"
-                        value={customAddress}
-                        onChange={(e) => {
-                            setCustomAddress(e.target.value);
-                            setCustomAddressError(null);
-                        }}
-                        placeholder="0x..."
-                        className={cn(
-                            "w-full px-3 py-2 bg-forge-bg border rounded-lg text-xs text-white placeholder-forge-muted focus:outline-none",
-                            customAddressError ? "border-red-500/50" : "border-forge-border/50 focus:border-emerald-500/50"
+                {showCustomContract && (
+                    <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                        <input
+                            type="text"
+                            value={customAddress}
+                            onChange={(e) => {
+                                setCustomAddress(e.target.value);
+                                setCustomAddressError(null);
+                            }}
+                            placeholder="0x..."
+                            className={cn(inputClass, customAddressError && 'border-red-500/50 focus:ring-red-500/40')}
+                        />
+                        {customAddressError && (
+                            <p className="flex items-center gap-2 text-sm text-red-400">
+                                <AlertCircle className="h-4 w-4 shrink-0" /> {customAddressError}
+                            </p>
                         )}
-                    />
-                    {customAddressError && (
-                        <p className="text-[10px] text-red-400 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> {customAddressError}
-                        </p>
-                    )}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleUseCustomContract}
-                            disabled={!customAddress || isValidatingContract}
-                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-medium disabled:opacity-50 flex items-center justify-center gap-1"
-                        >
-                            {isValidatingContract ? (
-                                <>
-                                    <Loader2 className="w-3 h-3 animate-spin" /> Validating...
-                                </>
-                            ) : (
-                                'Use Custom'
-                            )}
-                        </button>
-                        <button
-                            onClick={handleUseDefaultContract}
-                            className="flex-1 py-1.5 bg-forge-border hover:bg-forge-muted/20 text-white rounded text-[10px] font-medium"
-                        >
-                            Reset to Default
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={handleUseCustomContract}
+                                disabled={!customAddress || isValidatingContract}
+                                className={cn(btnClass('bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500 flex-1'), 'flex items-center justify-center gap-2')}
+                            >
+                                {isValidatingContract ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                {isValidatingContract ? 'Validating…' : 'Use custom'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleUseDefaultContract}
+                                className="rounded-xl border border-white/20 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10"
+                            >
+                                Reset
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            <button
-                onClick={fetchTokenInfo}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-colors"
-            >
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
-            </button>
+                <button
+                    type="button"
+                    onClick={fetchTokenInfo}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[var(--forge-bg)]"
+                >
+                    <RefreshCw className="h-4 w-4" /> Refresh token info
+                </button>
+            </div>
 
             {/* Transaction Status */}
             {txStatus.status !== 'idle' && (
                 <div className={cn(
-                    'rounded-lg p-2.5 border flex items-start gap-2',
-                    txStatus.status === 'pending' && 'bg-blue-500/10 border-blue-500/30',
-                    txStatus.status === 'success' && 'bg-emerald-500/10 border-emerald-500/30',
-                    txStatus.status === 'error' && 'bg-red-500/10 border-red-500/30'
+                    'flex items-start gap-3 rounded-xl border px-4 py-3',
+                    txStatus.status === 'pending' && 'border-sky-500/30 bg-sky-500/10',
+                    txStatus.status === 'success' && 'border-emerald-500/30 bg-emerald-500/10',
+                    txStatus.status === 'error' && 'border-red-500/30 bg-red-500/10'
                 )}>
-                    {txStatus.status === 'pending' && <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />}
-                    {txStatus.status === 'success' && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                    {txStatus.status === 'error' && <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />}
-                    <div className="flex-1 min-w-0">
+                    {txStatus.status === 'pending' && <Loader2 className="h-5 w-5 shrink-0 animate-spin text-sky-400" />}
+                    {txStatus.status === 'success' && <Check className="h-5 w-5 shrink-0 text-emerald-400" />}
+                    {txStatus.status === 'error' && <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />}
+                    <div className="min-w-0 flex-1">
                         <p className={cn(
-                            'text-[10px] font-medium truncate',
-                            txStatus.status === 'pending' && 'text-blue-300',
+                            'text-sm font-medium',
+                            txStatus.status === 'pending' && 'text-sky-300',
                             txStatus.status === 'success' && 'text-emerald-300',
                             txStatus.status === 'error' && 'text-red-300'
                         )}>{txStatus.message}</p>
                         {txStatus.hash && (
                             <a href={`${explorerUrl}/tx/${txStatus.hash}`} target="_blank" rel="noopener noreferrer"
-                                className="text-[9px] text-forge-muted hover:text-white flex items-center gap-1">
-                                Explorer <ExternalLink className="w-2.5 h-2.5" />
+                                className="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white">
+                                View on explorer <ExternalLink className="h-3 w-3" />
                             </a>
                         )}
                     </div>
@@ -710,21 +711,25 @@ export function ERC20InteractionPanel({
 
             {/* Token Stats */}
             {isConnected && (
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-forge-bg/50 border border-forge-border/30">
-                        <div className="flex items-center gap-1.5">
-                            <Coins className="w-3 h-3 text-emerald-400" />
-                            <span className="text-[10px] text-forge-muted">Total Supply</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="section-card flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                                <Coins className="h-5 w-5" />
+                            </div>
+                            <span className="text-sm text-slate-400">Total supply</span>
                         </div>
-                        <span className="text-xs font-medium text-white">{totalSupply ? Number(totalSupply).toLocaleString() : '—'}</span>
+                        <span className="text-lg font-semibold tabular-nums text-white">{totalSupply ? Number(totalSupply).toLocaleString() : '—'}</span>
                     </div>
                     {walletConnected && (
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-forge-bg/50 border border-forge-border/30">
-                            <div className="flex items-center gap-1.5">
-                                <Wallet className="w-3 h-3 text-teal-400" />
-                                <span className="text-[10px] text-forge-muted">Your Balance</span>
+                        <div className="section-card flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400">
+                                    <Wallet className="h-5 w-5" />
+                                </div>
+                                <span className="text-sm text-slate-400">Your balance</span>
                             </div>
-                            <span className="text-xs font-medium text-white">{userBalance ? Number(userBalance).toLocaleString() : '—'}</span>
+                            <span className="text-lg font-semibold tabular-nums text-white">{userBalance ? Number(userBalance).toLocaleString() : '—'}</span>
                         </div>
                     )}
                 </div>
@@ -732,138 +737,129 @@ export function ERC20InteractionPanel({
 
             {/* Write Operations */}
             {isConnected && walletConnected && (
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <Send className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-xs font-medium text-white">Write Operations</span>
-                    </div>
-
-                    {/* Transfer */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <span className="text-[10px] font-medium text-emerald-400">Transfer</span>
-                        <input type="text" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}
-                            placeholder="Recipient (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <input type="number" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={handleTransfer} disabled={txStatus.status === 'pending'}
-                            className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-medium disabled:opacity-50">
-                            Transfer
-                        </button>
-                    </div>
-
-                    {/* Approve */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <div className="flex items-center gap-1.5">
-                            <Shield className="w-3 h-3 text-blue-400" />
-                            <span className="text-[10px] font-medium text-blue-400">Approve Spender</span>
+                <div className="space-y-4">
+                    <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                            <Send className="h-4 w-4" />
+                        </span>
+                        Write operations
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {/* Transfer */}
+                        <div className="section-card space-y-3">
+                            <span className="text-sm font-medium text-emerald-400">Transfer</span>
+                            <input type="text" value={transferTo} onChange={(e) => setTransferTo(e.target.value)} placeholder="Recipient (0x…)" className={inputClass} />
+                            <input type="number" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleTransfer} disabled={txStatus.status === 'pending'} className={btnClass('bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500')}>
+                                Transfer
+                            </button>
                         </div>
-                        <input type="text" value={approveSpender} onChange={(e) => setApproveSpender(e.target.value)}
-                            placeholder="Spender (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <input type="number" value={approveAmount} onChange={(e) => setApproveAmount(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={handleApprove} disabled={txStatus.status === 'pending'}
-                            className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-medium disabled:opacity-50">
-                            Approve
-                        </button>
-                    </div>
 
-                    {/* Mint (to self) */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <div className="flex items-center gap-1.5">
-                            <Coins className="w-3 h-3 text-violet-400" />
-                            <span className="text-[10px] font-medium text-violet-400">Mint (to yourself)</span>
+                        {/* Transfer From */}
+                        <div className="section-card space-y-3">
+                            <div className="flex items-center gap-2 text-teal-400">
+                                <ArrowRightLeft className="h-4 w-4" />
+                                <span className="text-sm font-medium">Transfer from</span>
+                            </div>
+                            <input type="text" value={transferFromAddress} onChange={(e) => setTransferFromAddress(e.target.value)} placeholder="From (owner 0x…)" className={inputClass} />
+                            <input type="text" value={transferFromTo} onChange={(e) => setTransferFromTo(e.target.value)} placeholder="To (recipient 0x…)" className={inputClass} />
+                            <input type="number" value={transferFromAmount} onChange={(e) => setTransferFromAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleTransferFrom} disabled={txStatus.status === 'pending'} className={btnClass('bg-teal-600 hover:bg-teal-500 focus:ring-teal-500')}>
+                                Transfer from
+                            </button>
                         </div>
-                        <input type="number" value={mintAmount} onChange={(e) => setMintAmount(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={handleMint} disabled={txStatus.status === 'pending'}
-                            className="w-full py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded text-[10px] font-medium disabled:opacity-50">
-                            Mint
-                        </button>
-                    </div>
 
-                    {/* Mint To */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <div className="flex items-center gap-1.5">
-                            <Coins className="w-3 h-3 text-fuchsia-400" />
-                            <span className="text-[10px] font-medium text-fuchsia-400">Mint To Address</span>
+                        {/* Approve */}
+                        <div className="section-card space-y-3">
+                            <div className="flex items-center gap-2 text-blue-400">
+                                <Shield className="h-4 w-4" />
+                                <span className="text-sm font-medium">Approve spender</span>
+                            </div>
+                            <input type="text" value={approveSpender} onChange={(e) => setApproveSpender(e.target.value)} placeholder="Spender (0x…)" className={inputClass} />
+                            <input type="number" value={approveAmount} onChange={(e) => setApproveAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleApprove} disabled={txStatus.status === 'pending'} className={btnClass('bg-blue-600 hover:bg-blue-500 focus:ring-blue-500')}>
+                                Approve
+                            </button>
                         </div>
-                        <input type="text" value={mintToAddress} onChange={(e) => setMintToAddress(e.target.value)}
-                            placeholder="To Address (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <input type="number" value={mintToAmount} onChange={(e) => setMintToAmount(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={handleMintTo} disabled={txStatus.status === 'pending'}
-                            className="w-full py-1.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white rounded text-[10px] font-medium disabled:opacity-50">
-                            Mint To
-                        </button>
-                    </div>
 
-                    {/* Burn */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <div className="flex items-center gap-1.5">
-                            <Flame className="w-3 h-3 text-orange-400" />
-                            <span className="text-[10px] font-medium text-orange-400">Burn Tokens</span>
+                        {/* Mint (to self) */}
+                        <div className="section-card space-y-3">
+                            <div className="flex items-center gap-2 text-violet-400">
+                                <Coins className="h-4 w-4" />
+                                <span className="text-sm font-medium">Mint (to yourself)</span>
+                            </div>
+                            <input type="number" value={mintAmount} onChange={(e) => setMintAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleMint} disabled={txStatus.status === 'pending'} className={btnClass('bg-violet-600 hover:bg-violet-500 focus:ring-violet-500')}>
+                                Mint
+                            </button>
                         </div>
-                        <input type="number" value={burnAmount} onChange={(e) => setBurnAmount(e.target.value)}
-                            placeholder="Amount"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={handleBurn} disabled={txStatus.status === 'pending'}
-                            className="w-full py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded text-[10px] font-medium disabled:opacity-50">
-                            Burn
-                        </button>
+
+                        {/* Mint To */}
+                        <div className="section-card space-y-3">
+                            <div className="flex items-center gap-2 text-fuchsia-400">
+                                <Coins className="h-4 w-4" />
+                                <span className="text-sm font-medium">Mint to address</span>
+                            </div>
+                            <input type="text" value={mintToAddress} onChange={(e) => setMintToAddress(e.target.value)} placeholder="To address (0x…)" className={inputClass} />
+                            <input type="number" value={mintToAmount} onChange={(e) => setMintToAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleMintTo} disabled={txStatus.status === 'pending'} className={btnClass('bg-fuchsia-600 hover:bg-fuchsia-500 focus:ring-fuchsia-500')}>
+                                Mint to
+                            </button>
+                        </div>
+
+                        {/* Burn */}
+                        <div className="section-card space-y-3">
+                            <div className="flex items-center gap-2 text-orange-400">
+                                <Flame className="h-4 w-4" />
+                                <span className="text-sm font-medium">Burn tokens</span>
+                            </div>
+                            <input type="number" value={burnAmount} onChange={(e) => setBurnAmount(e.target.value)} placeholder="Amount" className={inputClass} />
+                            <button onClick={handleBurn} disabled={txStatus.status === 'pending'} className={btnClass('bg-orange-600 hover:bg-orange-500 focus:ring-orange-500')}>
+                                Burn
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Read Operations */}
             {isConnected && (
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="text-xs font-medium text-white">Read Operations</span>
-                    </div>
+                <div className="space-y-4">
+                    <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400">
+                            <BookOpen className="h-4 w-4" />
+                        </span>
+                        Read operations
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {/* Check Allowance */}
+                        <div className="section-card space-y-3">
+                            <span className="text-sm font-medium text-purple-400">Check allowance</span>
+                            <input type="text" value={allowanceOwner} onChange={(e) => setAllowanceOwner(e.target.value)} placeholder="Owner (0x…)" className={inputClass} />
+                            <input type="text" value={allowanceSpender} onChange={(e) => setAllowanceSpender(e.target.value)} placeholder="Spender (0x…)" className={inputClass} />
+                            <button type="button" onClick={checkAllowance} className={btnClass('bg-purple-600 hover:bg-purple-500 focus:ring-purple-500')}>
+                                Check allowance
+                            </button>
+                            {allowanceResult !== null && (
+                                <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-2">
+                                    <p className="text-sm text-purple-300">Allowance: <span className="font-semibold text-white">{allowanceResult}</span></p>
+                                </div>
+                            )}
+                        </div>
 
-                    {/* Check Allowance */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <span className="text-[10px] font-medium text-purple-400">Check Allowance</span>
-                        <input type="text" value={allowanceOwner} onChange={(e) => setAllowanceOwner(e.target.value)}
-                            placeholder="Owner (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <input type="text" value={allowanceSpender} onChange={(e) => setAllowanceSpender(e.target.value)}
-                            placeholder="Spender (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={checkAllowance}
-                            className="w-full py-1.5 bg-purple-600/50 hover:bg-purple-600 text-white rounded text-[10px] font-medium">
-                            Check
-                        </button>
-                        {allowanceResult !== null && (
-                            <div className="p-2 bg-purple-500/10 border border-purple-500/30 rounded">
-                                <p className="text-[10px] text-purple-300">Allowance: <span className="font-medium text-white">{allowanceResult}</span></p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Check Balance */}
-                    <div className="p-3 rounded-lg bg-forge-bg/50 border border-forge-border/30 space-y-2">
-                        <span className="text-[10px] font-medium text-cyan-400">Check Balance</span>
-                        <input type="text" value={balanceCheckAddress} onChange={(e) => setBalanceCheckAddress(e.target.value)}
-                            placeholder="Address (0x...)"
-                            className="w-full px-2.5 py-1.5 bg-forge-bg border border-forge-border/50 rounded text-xs text-white placeholder-forge-muted focus:outline-none" />
-                        <button onClick={checkBalance}
-                            className="w-full py-1.5 bg-cyan-600/50 hover:bg-cyan-600 text-white rounded text-[10px] font-medium">
-                            Check
-                        </button>
-                        {balanceCheckResult !== null && (
-                            <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded">
-                                <p className="text-[10px] text-cyan-300">Balance: <span className="font-medium text-white">{Number(balanceCheckResult).toLocaleString()}</span></p>
-                            </div>
-                        )}
+                        {/* Check Balance */}
+                        <div className="section-card space-y-3">
+                            <span className="text-sm font-medium text-cyan-400">Check balance</span>
+                            <input type="text" value={balanceCheckAddress} onChange={(e) => setBalanceCheckAddress(e.target.value)} placeholder="Address (0x…)" className={inputClass} />
+                            <button type="button" onClick={checkBalance} className={btnClass('bg-cyan-600 hover:bg-cyan-500 focus:ring-cyan-500')}>
+                                Check balance
+                            </button>
+                            {balanceCheckResult !== null && (
+                                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2">
+                                    <p className="text-sm text-cyan-300">Balance: <span className="font-semibold text-white">{Number(balanceCheckResult).toLocaleString()}</span></p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

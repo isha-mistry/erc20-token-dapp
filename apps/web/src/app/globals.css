@@ -3,33 +3,53 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255;
-  --background-end-rgb: 245, 245, 245;
-}
-
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
-.dark {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --background-start: #06090d;
+  --background-end: #0c1117;
+  --forge-bg: #0f1419;
+  --forge-border: #1e293b;
+  --forge-muted: #94a3b8;
+  --input-bg: #0d1117;
+  --input-border: #30363d;
+  --card-bg: rgba(22, 27, 34, 0.6);
+  --card-border: rgba(48, 54, 61, 0.5);
 }
-
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: var(--background-start);
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      rgba(16, 185, 129, 0.08),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 100% 0%,
+      rgba(99, 102, 241, 0.05),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 0% 100%,
+      rgba(34, 211, 238, 0.04),
+      transparent
+    );
+  min-height: 100vh;
+}
+
+@layer components {
+  .input-field {
+    @apply w-full rounded-xl border bg-[var(--input-bg)] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500
+           focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50
+           border-[var(--input-border)] transition-colors;
+  }
+  .btn-primary {
+    @apply w-full rounded-xl px-4 py-2.5 text-sm font-medium text-white transition-all
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--forge-bg)] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .section-card {
+    @apply rounded-xl border p-4 transition-colors;
+    background: var(--card-bg);
+    border-color: var(--card-border);
+  }
 }
